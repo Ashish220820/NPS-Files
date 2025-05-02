@@ -1,0 +1,84 @@
+public static class AES256GCM
+    {       
+        private static byte[] FillByZeros(byte[] nonce)
+        {
+            for (int i = 0; i < nonce.Length; i++)
+            {
+                nonce[i] = 0;
+            }
+            return nonce;
+        }
+        public static string AES256GCMEncrypt(string plaintext, string enckey)
+        {
+            const int nonceLength = 12; // in bytes
+            const int tagLenth = 16; // in bytes
+
+            var nonce = new byte[nonceLength];
+            nonce = FillByZeros(nonce);
+            byte[] key = Encoding.UTF8.GetBytes(enckey);
+
+            var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
+            var bcCiphertext = new byte[plaintextBytes.Length + tagLenth];
+
+            var cipher = new GcmBlockCipher(new AesEngine());
+            var parameters = new AeadParameters(new KeyParameter(key), tagLenth * 8, nonce);
+            cipher.Init(true, parameters);
+
+            var offset = cipher.ProcessBytes(plaintextBytes, 0, plaintextBytes.Length, bcCiphertext, 0);
+            cipher.DoFinal(bcCiphertext, offset);
+            var ciphertext = new byte[plaintextBytes.Length];
+            var tag = new byte[tagLenth];
+            Buffer.BlockCopy(bcCiphertext, 0, ciphertext, 0, plaintextBytes.Length);
+            Buffer.BlockCopy(bcCiphertext, plaintextBytes.Length, tag, 0, tagLenth);
+
+            var FinalCT = asHex(bcCiphertext);
+            return FinalCT;
+        }
+        public static string AES256GCMDecrypt(string EncryptedText, string enckey)//,byte[] ciphertext, byte[] tag, byte[] key)
+        {
+            const int nonceLength = 12; // in bytes
+            const int tagLenth = 16; // in bytes
+
+            byte[] FinalEncryption = AESBytes(EncryptedText);
+            byte[] tag = new byte[tagLenth];
+            byte[] ciphertext = new byte[FinalEncryption.Length - tagLenth];
+            byte[] key = Encoding.UTF8.GetBytes(enckey);
+            Buffer.BlockCopy(FinalEncryption, FinalEncryption.Length - tagLenth, tag, 0, tag.Length);
+            Buffer.BlockCopy(FinalEncryption, 0, ciphertext, 0, FinalEncryption.Length - tagLenth);
+
+            byte[] nonce = new byte[nonceLength];
+            var plaintextBytes = new byte[ciphertext.Length];
+            var cipher = new GcmBlockCipher(new AesEngine());
+            var parameters = new AeadParameters(new KeyParameter(key), tag.Length * 8, nonce);
+            cipher.Init(false, parameters);
+            var bouncyCastleCiphertext = ciphertext.Concat(tag).ToArray();
+            var offset = cipher.ProcessBytes(bouncyCastleCiphertext, 0, bouncyCastleCiphertext.Length, plaintextBytes, 0);
+            cipher.DoFinal(plaintextBytes, offset);
+
+            return Encoding.UTF8.GetString(plaintextBytes);
+        }
+
+        public static string asHex(byte[] buf)
+        {
+            StringBuilder strbuf = new StringBuilder(buf.Length * 2); // initialize the string buffer with a double length of input array, here the length is 352
+            int i;
+            for (i = 0; i < buf.Length; i++)
+            {
+                if (((int)buf[i] & 0xff) < 0x10)
+                    strbuf.Append("0");
+                strbuf.Append(((int)buf[i] & 0xff).ToString("X"));
+            }
+            return strbuf.ToString().ToUpper();
+        }
+
+        private static byte[] AESBytes(String hexString)
+        {
+            byte[] bts = new byte[(hexString.Length / 2)];
+            for (int i = 0; (i < bts.Length); i++)
+            {
+                bts[i] = Convert.ToByte(hexString.Substring(2 * i, 2), 16);
+            }
+
+            return bts;
+        }
+    }
